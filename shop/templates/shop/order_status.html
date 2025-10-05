@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Status do Pedido</title>
+  <style>
+    body{font-family:system-ui;margin:16px}
+    .muted{color:#6b7280}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid #e5e7eb;border-radius:999px}
+    .table{width:100%;border-collapse:collapse;margin-top:12px}
+    .table th,.table td{border-bottom:1px solid #e5e7eb;padding:8px;text-align:left}
+    .right{text-align:right}
+    .summary{margin-top:12px;display:flex;gap:24px;flex-wrap:wrap}
+    .box{border:1px solid #e5e7eb;border-radius:12px;padding:12px}
+    a.btn{display:inline-block;padding:8px 12px;border:1px solid #111;border-radius:8px;text-decoration:none}
+  </style>
+</head>
+<body>
+  <a href="/">← Voltar</a>
+  <h1>Status do Pedido</h1>
+
+  <div class="summary">
+    <div class="box">
+      <div><strong>Código curto:</strong> {{ order.short_code }}</div>
+      <div><strong>Status:</strong> <span class="pill">{{ order.get_status_display }}</span></div>
+      <div class="muted">Criado em: {{ order.created_at|date:"d/m/Y H:i" }}</div>
+    </div>
+    <div class="box">
+      <div><strong>E-mail do cliente:</strong> {{ order.customer_email|default:"—" }}</div>
+      <div><strong>Telefone:</strong> {{ order.customer_phone|default:"—" }}</div>
+      <div><strong>Link do pedido:</strong> <a href="/pedido/{{ order.public_token }}/">/pedido/{{ order.public_token }}/</a></div>
+    </div>
+  </div>
+
+  <h2>Itens</h2>
+  {% if items %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Produto</th>
+        <th class="right">Qtd</th>
+        <th class="right">Preço (un.)</th>
+        <th class="right">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>
+          {% if it.product.image_url %}
+            <img src="{{ it.product.image_url }}" alt="{{ it.product.title }}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;vertical-align:middle;margin-right:8px" />
+          {% endif %}
+          {{ it.product.title }}
+        </td>
+        <td class="right">{{ it.qty }}</td>
+        <td class="right">R$ {{ it.unit_price_cents|floatformat:-2 }}</td>
+        <td class="right">R$ {{ it.line_total_cents|floatformat:-2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="3" class="right">Total</th>
+        <th class="right">R$ {{ order.total_cents|floatformat:-2 }}</th>
+      </tr>
+    </tfoot>
+  </table>
+  {% else %}
+    <p class="muted">Nenhum item associado a este pedido.</p>
+  {% endif %}
+
+  <div style="margin-top:16px">
+    <a class="btn" href="/meu-pedido/">Buscar outro pedido</a>
+  </div>
+</body>
+</html>

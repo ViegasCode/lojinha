@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meu carrinho</title>
+  <style>
+    body{font-family:system-ui;margin:16px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{border-bottom:1px solid #e5e7eb;padding:8px;text-align:left}
+    .right{text-align:right}
+    .muted{color:#6b7280}
+    .actions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+    a.btn, button.btn{display:inline-block;padding:8px 12px;border:1px solid #111;border-radius:8px;text-decoration:none;background:#111;color:#fff}
+    .btn.secondary{background:#fff;color:#111}
+    input[type="number"]{width:70px}
+    .box{border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-top:12px;max-width:520px}
+  </style>
+</head>
+<body>
+  <a href="/">← Continuar comprando</a>
+  <h1>Meu carrinho</h1>
+
+  {% load pricing %}
+  {% if items %}
+    <table>
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th class="right">Preço</th>
+          <th class="right">Qtd</th>
+          <th class="right">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody id="cart-body">
+        {% for p, qty in items %}
+        <tr data-id="{{ p.id }}">
+          <td>
+            {% if p.image_url %}
+              <img src="{{ p.image_url }}" alt="{{ p.title }}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;vertical-align:middle;margin-right:8px" />
+            {% endif %}
+            {{ p.title }}
+          </td>
+          <td class="right">{{ p.price_cents|money }}</td>
+          <td class="right">
+            <input type="number" min="0" value="{{ qty }}" />
+          </td>
+          <td class="right">
+            {% widthratio p.price_cents 1 qty as sub_cents %}
+            {{ sub_cents|money }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="3" class="right">Total</th>
+          <th class="right" id="total-cell">{{ total_cents|money }}</th>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="actions">
+      <button class="btn secondary" id="btn-clear">Limpar carrinho</button>
+    </div>
+
+    <div class="box">
+      <h3>Finalizar</h3>
+      <form id="checkoutCart" novalidate>
+        {% csrf_token %}
+        <label>Email: <input required type="email" name="email" placeholder="seu@email.com" /></label><br>
+        <label>WhatsApp (opcional): <input name="phone" placeholder="+55..." /></label><br>
+        <button class="btn" type="submit">Ir para pagamento</button>
+        <div id="msg" class="muted"></div>
+      </form>
+    </div>
+
+  {% else %}
+    <p class="muted">Seu carrinho está vazio.</p>
+    <p><a class="btn" href="/">Ver produtos</a></p>
+  {% endif %}
+
+  <script>
+    function getCookie(name){
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if(parts.length === 2) return parts.pop().split(';').shift();
+    }
+    const csrftoken = getCookie('csrftoken') || '';
+
+    // Atualiza Qtd
+    document.querySelectorAll('#cart-body tr input[type="number"]').forEach(inp => {
+      inp.addEventListener('change', async (e) => {
+        const tr = e.target.closest('tr');
+        const pid = tr.getAttribute('data-id');
+        const qty = parseInt(e.target.value||'0',10);
+        try{
+          const r = await fetch('/api/cart/update', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json','X-CSRFToken': csrftoken},
+            body: JSON.stringify({product_id: pid, qty})
+          });
+          if(!r.ok){ alert('Erro ao atualizar'); return; }
+          // Recarrega para recomputar totais/linhas
+          location.reload();
+        }catch(err){
+          alert('Erro inesperado: '+err);
+        }
+      });
+    });
+
+    // Limpar carrinho
+    const btnClear = document.getElementById('btn-clear');
+    if(btnClear){
+      btnClear.addEventListener('click', async () => {
+        const ok = confirm('Limpar todo o carrinho?');
+        if(!ok) return;
+        const r = await fetch('/api/cart/clear', {method:'POST', headers:{'X-CSRFToken': csrftoken}});
+        if(r.ok) location.reload();
+      });
+    }
+
+    // Checkout do carrinho
+    const form = document.getElementById('checkoutCart');
+    if(form){
+      const msg = document.getElementById('msg');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        msg.textContent = 'Criando checkout...';
+        try{
+          const fd = new FormData(form);
+          const payload = Object.fromEntries(fd.entries());
+          const r = await fetch('/api/checkout/cart', {
+            method:'POST',
+            headers:{'Content-Type':'application/json','X-CSRFToken': csrftoken},
+            body: JSON.stringify(payload)
+          });
+          const txt = await r.text();
+          if(!r.ok){ msg.textContent = 'Erro: '+txt.slice(0,200); return; }
+          const data = JSON.parse(txt);
+          if(data.init_point){ window.location.href = data.init_point; }
+          else { msg.textContent = 'Falha ao criar checkout'; }
+        }catch(err){
+          msg.textContent = 'Erro inesperado: '+err;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

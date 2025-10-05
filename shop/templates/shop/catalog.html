@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Catálogo</title>
+  <style>
+    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin:16px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;display:flex;flex-direction:column}
+    img{width:100%;height:160px;object-fit:cover;border-radius:8px}
+    .price{font-weight:700;margin:8px 0}
+    a.btn, button.btn{display:inline-block;padding:8px 12px;border:1px solid #111;border-radius:8px;text-decoration:none;background:#111;color:#fff}
+    .btn.secondary{background:#fff;color:#111}
+    .badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;border:1px solid #111}
+    .badge.warn{border-color:#b45309;color:#b45309}
+    .badge.out{border-color:#991b1b;color:#991b1b}
+    .pager{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:16px}
+    .muted{color:#6b7280}
+    .inputs{display:flex;gap:8px;align-items:center}
+    .inputs input{width:110px}
+  </style>
+</head>
+<body>
+  {% load pricing %}
+  <h1>Catálogo</h1>
+
+  <!-- toolbar existente... -->
+  <!-- ... (mantém seu formulário de filtros/ordenação) ... -->
+
+  <div class="grid">
+    {% for p in products %}
+    <div class="card">
+      {% if p.image_url %}<img src="{{ p.image_url }}" alt="{{ p.title }}" />{% endif %}
+      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+        <h3 style="margin:8px 0">{{ p.title }}</h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          {% if p.featured %}<span class="badge">★ Destaque</span>{% endif %}
+          {% if p.stock == 0 %}
+            <span class="badge out">Sem estoque</span>
+          {% elif p.stock <= 3 %}
+            <span class="badge warn">Acaba logo</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if p.category %}<div class="muted">{{ p.category.name }}</div>{% endif %}
+      <div class="price">{{ p.price_cents|money }}</div>
+      {% best_installment p.price_cents as inst %}
+      {% if inst %}
+        <div class="muted">Em até {{ inst.n }}x de {{ inst.per_cents|money }} sem juros</div>
+      {% endif %}
+      <a class="btn" href="{% url 'product_detail' p.slug %}">Ver</a>
+    </div>
+    {% empty %}
+    <p>Nenhum produto encontrado.</p>
+    {% endfor %}
+  </div>
+
+  <!-- pager existente... -->
+</body>
+</html>

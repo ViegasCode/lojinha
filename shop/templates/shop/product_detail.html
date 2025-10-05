@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ product.title }}</title>
+  <style>
+    body{font-family:system-ui;margin:16px}
+    img{max-width:100%;border-radius:12px}
+    .badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;border:1px solid #111;margin-left:8px}
+    .warn{border-color:#b45309;color:#b45309}
+    .out{border-color:#991b1b;color:#991b1b}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+    .muted{color:#6b7280}
+    ul.install{margin:8px 0 16px 18px}
+  </style>
+</head>
+<body>
+  {% load pricing %}
+  <a href="/">← Voltar</a>
+  <h1>{{ product.title }}
+    {% if product.stock == 0 %}
+      <span class="badge out">Sem estoque</span>
+    {% elif product.stock <= 3 %}
+      <span class="badge warn">Acaba logo</span>
+    {% endif %}
+  </h1>
+
+  {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.title }}" />{% endif %}
+  <p style="font-size:18px;margin-bottom:4px">{{ product.price_cents|money }}</p>
+
+  {% installment_plans product.price_cents as plans %}
+  {% if plans %}
+    <div class="muted">Parcelamento sem juros disponível:</div>
+    <ul class="install">
+      {% for pl in plans %}
+        <li>{{ pl.n }}x de {{ pl.per_cents|money }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+<form id="buyForm" style="margin-top:8px">
+  {% csrf_token %}
+  <input type="hidden" name="product_id" value="{{ product.id }}" />
+  <label>Quantidade: <input type="number" name="qty" value="1" min="1" max="{{ product.stock }}"></label><br>
+  <label>Email (para receber link mágico): <input required type="email" name="email"></label><br>
+  <label>WhatsApp (opcional): <input name="phone" placeholder="+55..." /></label><br>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button type="submit">Comprar agora</button>
+    <button type="button" id="btn-add-cart">Adicionar ao carrinho</button>
+    <a href="/carrinho/">Ir ao carrinho</a>
+  </div>
+</form>
+
+<script>
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if(parts.length === 2) return parts.pop().split(';').shift();
+  }
+  const csrftoken = getCookie('csrftoken') || '';
+  const form = document.getElementById('buyForm');
+
+  // Comprar agora (fluxo existente)
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    {% if product.stock == 0 %} alert('Produto sem estoque.'); return; {% endif %}
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+    payload.qty = parseInt(payload.qty||'1',10);
+    try{
+      const r = await fetch('/api/checkout', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken': csrftoken},
+        body: JSON.stringify(payload)
+      });
+      if(!r.ok){
+        const txt = await r.text();
+        alert('Erro no checkout: '+txt.slice(0,200));
+        return;
+      }
+      const data = await r.json();
+      if(data.init_point) window.location.href = data.init_point;
+      else alert('Falha ao criar checkout.');
+    }catch(err){ alert('Erro inesperado: '+err); }
+  });
+
+  // Adicionar ao carrinho
+  document.getElementById('btn-add-cart').addEventListener('click', async () => {
+    {% if product.stock == 0 %} alert('Produto sem estoque.'); return; {% endif %}
+    const qty = parseInt((new FormData(form)).get('qty')||'1',10);
+    const payload = {product_id: {{ product.id }}, qty: qty};
+    try{
+      const r = await fetch('/api/cart/add', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken': csrftoken},
+        body: JSON.stringify(payload)
+      });
+      if(!r.ok){
+        const txt = await r.text();
+        alert('Erro ao adicionar: '+txt.slice(0,200));
+        return;
+      }
+      window.location.href = '/carrinho/';
+    }catch(err){ alert('Erro inesperado: '+err); }
+  });
+</script>
+
+</body>
+</html>
