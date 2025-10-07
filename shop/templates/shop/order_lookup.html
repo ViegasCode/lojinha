@@ -4,43 +4,41 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Buscar meu pedido</title>
-  <style>
-    body{font-family:system-ui;margin:16px}
-    form{margin:12px 0;padding:12px;border:1px solid #e5e7eb;border-radius:12px;max-width:460px}
-    label{display:block;margin:8px 0}
-    button{padding:8px 12px;border:1px solid #111;border-radius:8px;background:#111;color:#fff}
-    .muted{color:#6b7280}
-    .success{color:#065f46}
-    .error{color:#991b1b}
-    .hidden{display:none}
-  </style>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/static/css/order_lookup.css">
 </head>
 <body>
-  <a href="/">← Voltar</a>
-  <h1>Buscar meu pedido</h1>
-  <p class="muted">Informe o e-mail usado na compra e o código curto do pedido para receber um código de verificação (OTP).</p>
 
-  <!-- evita validação nativa do browser; validamos via JS -->
-  <form id="lookupForm" novalidate>
-    {% csrf_token %}
-    <label>Email:
-      <input required type="email" name="email" placeholder="seu@email.com" />
-    </label>
-    <label>Código do pedido (short_code):
-      <input required name="short_code" placeholder="ex.: A1B2C3D4" />
-    </label>
-    <button type="submit">Enviar código</button>
-    <div id="lookupMsg" class="muted"></div>
-  </form>
+  <main class="lookup-container">
+    <a href="/" class="back-link">← Voltar para a loja</a>
+    <h1>Buscar Meu Pedido</h1>
+    <p class="intro-text">Informe o e-mail usado na compra e o código do pedido para receber um código de verificação.</p>
 
-  <form id="otpForm" class="hidden" novalidate>
-    {% csrf_token %}
-    <label>Digite o código recebido (OTP):
-      <input required name="otp" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" />
-    </label>
-    <button type="submit">Ver meu pedido</button>
-    <div id="otpMsg" class="muted"></div>
-  </form>
+    <form id="lookupForm" novalidate>
+      {% csrf_token %}
+      <label for="email-input">Email:</label>
+      <input id="email-input" required type="email" name="email" placeholder="seu@email.com" />
+      
+      <label for="short-code-input" style="margin-top: 16px;">Código do pedido:</label>
+      <input id="short-code-input" required type="text" name="short_code" placeholder="Ex.: A1B2C3D4" />
+      
+      <button type="submit">Enviar código de acesso</button>
+      <div id="lookupMsg" class="message muted"></div>
+    </form>
+
+    <form id="otpForm" class="hidden" novalidate>
+      {% csrf_token %}
+      <label for="otp-input">Digite o código de 6 dígitos recebido:</label>
+      <input id="otp-input" required name="otp" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" />
+      
+      <button type="submit">Ver meu pedido</button>
+      <div id="otpMsg" class="message muted"></div>
+    </form>
+  </main>
 
   <script>
     function getCookie(name){
@@ -64,11 +62,11 @@
       context.short_code = (fd.get('short_code') || '').trim();
       if(!context.email){
         lookupMsg.textContent = 'Informe um e-mail válido.';
-        lookupMsg.className = 'error';
+        lookupMsg.className = 'message error';
         return;
       }
       lookupMsg.textContent = 'Enviando código...';
-      lookupMsg.className = 'muted';
+      lookupMsg.className = 'message muted';
       try{
         const r = await fetch('/api/orders/lookup',{
           method:'POST',
@@ -78,16 +76,16 @@
         const txt = await r.text();
         if(!r.ok){
           lookupMsg.textContent = 'Erro: ' + txt.slice(0,200);
-          lookupMsg.className = 'error';
+          lookupMsg.className = 'message error';
           return;
         }
-        lookupMsg.textContent = 'Código enviado! Confira seu e-mail (ou console, se estiver usando EMAIL_BACKEND=console).';
-        lookupMsg.className = 'success';
+        lookupMsg.textContent = 'Código enviado! Confira seu e-mail.';
+        lookupMsg.className = 'message success';
         otpForm.classList.remove('hidden');
         otpForm.querySelector('input[name="otp"]').focus();
       }catch(err){
         lookupMsg.textContent = 'Erro inesperado: '+err;
-        lookupMsg.className = 'error';
+        lookupMsg.className = 'message error';
       }
     });
 
@@ -95,15 +93,15 @@
       e.preventDefault();
       const fd = new FormData(otpForm);
       let otp = (fd.get('otp') || '');
-      otp = otp.replace(/\D/g,''); // só dígitos
+      otp = otp.replace(/\D/g,'');
       if(otp.length !== 6){
         otpMsg.textContent = 'Digite os 6 dígitos do código.';
-        otpMsg.className = 'error';
+        otpMsg.className = 'message error';
         return;
       }
       const payload = { ...context, otp };
       otpMsg.textContent = 'Verificando...';
-      otpMsg.className = 'muted';
+      otpMsg.className = 'message muted';
       try{
         const r = await fetch('/api/orders/verify-otp', {
           method:'POST',
@@ -113,7 +111,7 @@
         const txt = await r.text();
         if(!r.ok){
           otpMsg.textContent = 'Erro: ' + txt.slice(0,200);
-          otpMsg.className = 'error';
+          otpMsg.className = 'message error';
           return;
         }
         const data = JSON.parse(txt);
@@ -121,11 +119,11 @@
           window.location.href = data.public_url;
         } else {
           otpMsg.textContent = 'Resposta sem link do pedido.';
-          otpMsg.className = 'error';
+          otpMsg.className = 'message error';
         }
       }catch(err){
         otpMsg.textContent = 'Erro inesperado: '+err;
-        otpMsg.className = 'error';
+        otpMsg.className = 'message error';
       }
     });
   </script>

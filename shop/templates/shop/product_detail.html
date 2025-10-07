@@ -11,14 +11,6 @@
     {% load pricing %}
     <div class="container">
         <a href="/">← Voltar</a>
-        <div class="product-header">
-            <h1>{{ product.title }}</h1>
-            {% if product.stock == 0 %}
-                <span class="badge out">Sem estoque</span>
-            {% elif product.stock <= 3 %}
-                <span class="badge warn">Acaba logo</span>
-            {% endif %}
-        </div>
         
         <div class="product-layout">
             {% if product.image_url %}
@@ -29,16 +21,28 @@
             <div class="product-details">
                 <p class="price">{{ product.price_cents|money }}</p>
                 
+                <h1>{{ product.title }}</h1>
+
+                {% if product.stock == 0 %}
+                    <span class="badge out">Sem estoque</span>
+                {% elif product.stock <= 3 %}
+                    <span class="badge warn">Acaba logo</span>
+                {% endif %}
+                
                 {% installment_plans product.price_cents as plans %}
                 {% if plans %}
-                    <div class="muted">Parcelamento sem juros disponível:</div>
-                    <ul class="install">
-                        {% for pl in plans %}
-                            <li>{{ pl.n }}x de {{ pl.per_cents|money }}</li>
-                        {% endfor %}
-                    </ul>
+                    <div class="installments">
+                        <label for="installment-options">Parcelamento sem juros:</label>
+                        <select name="installments" id="installment-options">
+                            {% for pl in plans %}
+                                <option value="{{ pl.n }}">
+                                    {{ pl.n }}x de {{ pl.per_cents|money }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 {% endif %}
-        
+    
                 <form id="buyForm">
                     {% csrf_token %}
                     <input type="hidden" name="product_id" value="{{ product.id }}" />
@@ -65,65 +69,65 @@
     </div>
     
     <script>
-        function getCookie(name) {
-            const value = `; ${document.cookie}`;
-            const parts = value.split(`; ${name}=`);
-            if (parts.length === 2) return parts.pop().split(';').shift();
-        }
-        const csrftoken = getCookie('csrftoken') || '';
-        const form = document.getElementById('buyForm');
-    
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if ({% if product.stock == 0 %}true{% else %}false{% endif %}) {
-                alert('Produto sem estoque.');
-                return;
-            }
-            const fd = new FormData(form);
-            const payload = Object.fromEntries(fd.entries());
-            payload.qty = parseInt(payload.qty || '1', 10);
-            try {
-                const r = await fetch('/api/checkout', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-                    body: JSON.stringify(payload)
-                });
-                if (!r.ok) {
-                    const txt = await r.text();
-                    alert('Erro no checkout: ' + txt.slice(0, 200));
-                    return;
-                }
-                const data = await r.json();
-                if (data.init_point) window.location.href = data.init_point;
-                else alert('Falha ao criar checkout.');
-            } catch (err) {
-                alert('Erro inesperado: ' + err);
-            }
-        });
-    
-        document.getElementById('btn-add-cart').addEventListener('click', async () => {
-            if ({% if product.stock == 0 %}true{% else %}false{% endif %}) {
-                alert('Produto sem estoque.');
-                return;
-            }
-            const qty = parseInt((new FormData(form)).get('qty') || '1', 10);
-            const payload = { product_id: {{ product.id }}, qty: qty };
-            try {
-                const r = await fetch('/api/cart/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-                    body: JSON.stringify(payload)
-                });
-                if (!r.ok) {
-                    const txt = await r.text();
-                    alert('Erro ao adicionar: ' + txt.slice(0, 200));
-                    return;
-                }
-                window.location.href = '/carrinho/';
-            } catch (err) {
-                alert('Erro inesperado: ' + err);
-            }
-        });
+      function getCookie(name) {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop().split(';').shift();
+      }
+      const csrftoken = getCookie('csrftoken') || '';
+      const form = document.getElementById('buyForm');
+  
+      form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          if ({% if product.stock == 0 %}true{% else %}false{% endif %}) {
+              alert('Produto sem estoque.');
+              return;
+          }
+          const fd = new FormData(form);
+          const payload = Object.fromEntries(fd.entries());
+          payload.qty = parseInt(payload.qty || '1', 10);
+          try {
+              const r = await fetch('/api/checkout', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+                  body: JSON.stringify(payload)
+              });
+              if (!r.ok) {
+                  const txt = await r.text();
+                  alert('Erro no checkout: ' + txt.slice(0, 200));
+                  return;
+              }
+              const data = await r.json();
+              if (data.init_point) window.location.href = data.init_point;
+              else alert('Falha ao criar checkout.');
+          } catch (err) {
+              alert('Erro inesperado: ' + err);
+          }
+      });
+  
+      document.getElementById('btn-add-cart').addEventListener('click', async () => {
+          if ({% if product.stock == 0 %}true{% else %}false{% endif %}) {
+              alert('Produto sem estoque.');
+              return;
+          }
+          const qty = parseInt((new FormData(form)).get('qty') || '1', 10);
+          const payload = { product_id: {{ product.id }}, qty: qty };
+          try {
+              const r = await fetch('/api/cart/add', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+                  body: JSON.stringify(payload)
+              });
+              if (!r.ok) {
+                  const txt = await r.text();
+                  alert('Erro ao adicionar: ' + txt.slice(0, 200));
+                  return;
+              }
+              window.location.href = '/carrinho/';
+          } catch (err) {
+              alert('Erro inesperado: ' + err);
+          }
+      });
     </script>
 </body>
 </html>

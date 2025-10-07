@@ -1,51 +1,76 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Catálogo</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/catalog.css' %}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Produtos</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/static/css/catalog.css">
 </head>
 <body>
-    {% load pricing %}
-    <h1>Catálogo</h1>
 
-    <div class="toolbar">
-        </div>
+    <div class="container">
+        <h1 class="page-title">Nossos Produtos</h1>
 
-    <div class="grid">
-        {% for p in products %}
-        <a href="{% url 'product_detail' p.slug %}" class="card-link">
-            <div class="card">
-              <div class = "card-image-countainer">
-                {% if p.image_url %}<img src="{{ p.image_url }}" alt="{{ p.title }}" />{% endif %}
-              </div>
-                <div class="card-content">
-                    <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
-                        <h3 style="margin:8px 0">{{ p.title }}</h3>
-                        <div style="display:flex;gap:6px;align-items:center">
-                            {% if p.featured %}<span class="badge">★ Destaque</span>{% endif %}
-                            {% if p.stock == 0 %}
-                                <span class="badge out">Sem estoque</span>
-                            {% elif p.stock <= 3 %}
-                                <span class="badge warn">Acaba logo</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% if p.category %}<div class="muted">{{ p.category.name }}</div>{% endif %}
-                    <div class="price">{{ p.price_cents|money }}</div>
-                    {% best_installment p.price_cents as inst %}
-                    {% if inst %}
-                        <div class="muted">Em até {{ inst.n }}x de {{ inst.per_cents|money }} sem juros</div>
-                    {% endif %}
+        <div class="catalog-toolbar">
+            
+            <div class="search-container">
+                <input type="search" id="product-search" placeholder="Pesquisar por nome...">
+            </div>
+
+            <div class="filter-controls">
+                <div class="filter-group">
+                    <label for="category-filter">Filtrar por Categoria:</label>
+                    <select id="category-filter">
+                        <option value="todas">Todas as Categorias</option>
+                        
+                        {% for category in categories %}
+                            <option value="{{ category.slug }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="sort-by">Ordenar por:</label>
+                    <select id="sort-by">
+                        <option value="relevancia">Relevância</option>
+                        <option value="preco-asc">Menor Preço</option>
+                        <option value="preco-desc">Maior Preço</option>
+                    </select>
                 </div>
             </div>
-        </a>
-        {% empty %}
-        <p>Nenhum produto encontrado.</p>
-        {% endfor %}
-    </div>
 
-    </body>
+        </div>
+        <div class="grid">
+
+            {% for product in products %}
+                <a href="{{ product.get_absolute_url }}" class="card-link">
+                    <div class="card" 
+                         data-name="{{ product.title|lower }}" 
+                         data-category="{{ product.category.slug }}"
+                         data-price="{{ product.price }}">
+                        
+                        <div class="card-image-container">
+                            <img src="{{ product.image_url }}" alt="{{ product.title }}">
+                        </div>
+                        
+                        <div class="card-content">
+                            <div class="card-header">
+                                <h3>{{ product.title }}</h3>
+                            </div>
+                            <p class="muted">{{ product.category.name }}</p>
+                            <div class="price">R$ {{ product.price|floatformat:2 }}</div>
+                        </div>
+                    </div>
+                </a>
+            {% empty %}
+                <p>Nenhum produto encontrado.</p>
+            {% endfor %}
+            </div> </div> <script src="/static/js/catalog.js"></script>
+
+</body>
 </html>

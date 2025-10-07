@@ -3,18 +3,32 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Compra concluída</title>
-  <style>body{font-family:system-ui;margin:16px}</style>
+  <title>Compra Aprovada! - Sua Loja</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/static/css/checkout_success.css">
+
 </head>
 <body>
-  <h1>Compra concluída 🎉</h1>
-  <p>Obrigado! Você receberá um e-mail/WhatsApp com o link do pedido.</p>
 
-  <!-- Se a página for acessada após o checkout, ainda não temos o objeto Order aqui.
-       Então deixo instrução + link para a página de busca. -->
-  <p><strong>Como consultar depois:</strong> acesse <a href="/meu-pedido/">Buscar meu pedido</a> e use o e-mail da compra.
-     O sistema enviará um código (OTP) para você acessar com segurança.</p>
+  <main class="success-container">
+    
+    <div class="success-icon">✔</div>
 
-  <a href="/">Voltar à loja</a>
+    <h1>Compra realizada com sucesso!</h1>
+    <p>Obrigado pela sua confiança. Um e-mail com os detalhes e o link de acompanhamento do seu pedido já foi enviado.</p>
+
+    <div class="instructions">
+      <p><strong>Como consultar depois:</strong> acesse a página <a href="/meu-pedido/">Buscar meu pedido</a> e informe o e-mail utilizado na compra.
+         Você receberá um código de acesso para consultar os detalhes com segurança.</p>
+    </div>
+
+    <a href="/" class="button">Continuar Navegando</a>
+
+  </main>
+  
 </body>
 </html>

@@ -1,4 +1,5 @@
 from django.db import models
+from django.urls import reverse  # <--- ADICIONADO
 from .utils import gen_public_token, gen_short_code
 
 class Category(models.Model):
@@ -12,8 +13,6 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
-# ... imports e classes acima inalterados ...
-
 class Product(models.Model):
     title = models.CharField(max_length=180)
     slug = models.SlugField(max_length=180, unique=True)
@@ -24,11 +23,20 @@ class Product(models.Model):
     category = models.ForeignKey("Category", null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
     active = models.BooleanField(default=True)
     featured = models.BooleanField(default=False)
-    views = models.PositiveIntegerField(default=0)  # 👈 novo campo para popularidade
+    views = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.title
+
+    @property
+    def price(self):
+        return self.price_cents / 100
+
+    # 👇 MÉTODO ADICIONADO PARA GERAR A URL DO PRODUTO 👇
+    def get_absolute_url(self):
+        """Retorna a URL completa para a página de detalhe de um produto."""
+        return reverse('product_detail', kwargs={'slug': self.slug})
 
 
 class Order(models.Model):

@@ -1,0 +1,77 @@
+/* --- Estilos Gerais --- */
+body {
+  font-family: 'Poppins', sans-serif; /* Usando a fonte Poppins, com fallback para a do sistema */
+  background-color: #f4f6f9; /* Um cinza claro para o fundo */
+  color: #333;
+  margin: 0;
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  text-align: center;
+}
+
+/* --- O Cartão de Confirmação --- */
+.success-container {
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  padding: 40px;
+  max-width: 600px;
+  width: 100%;
+}
+
+/* --- Ícone de Sucesso --- */
+.success-icon {
+  font-size: 48px;
+  color: #28a745; /* Verde para sucesso */
+  margin-bottom: 20px;
+}
+
+/* --- Tipografia --- */
+h1 {
+  font-size: 2em;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+p {
+  font-size: 1.1em;
+  line-height: 1.6;
+  color: #555;
+  margin-bottom: 24px;
+}
+
+.instructions {
+  background-color: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  padding: 20px;
+  border-radius: 8px;
+  font-size: 1em;
+  text-align: left;
+}
+
+.instructions strong {
+  color: #0056b3;
+}
+
+/* --- Botão de Ação --- */
+.button {
+  display: inline-block;
+  background-color: #007bff; /* Cor primária do botão */
+  color: #ffffff;
+  text-decoration: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1em;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  margin-top: 24px;
+}
+.button:hover {
+  background-color: #0056b3; /* Cor mais escura no hover */
+  transform: translateY(-2px);
+}
