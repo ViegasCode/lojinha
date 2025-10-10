@@ -1,5 +1,5 @@
 from django.db import models
-from django.urls import reverse  # <--- ADICIONADO
+from django.urls import reverse
 from .utils import gen_public_token, gen_short_code
 
 class Category(models.Model):
@@ -26,6 +26,11 @@ class Product(models.Model):
     views = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def price(self):
+        # Retorna o valor em reais, e não em centavos
+        return self.price_cents / 100.0
+
     def __str__(self):
         return self.title
 
@@ -33,10 +38,10 @@ class Product(models.Model):
     def price(self):
         return self.price_cents / 100
 
-    # 👇 MÉTODO ADICIONADO PARA GERAR A URL DO PRODUTO 👇
+ 
     def get_absolute_url(self):
         """Retorna a URL completa para a página de detalhe de um produto."""
-        return reverse('product_detail', kwargs={'slug': self.slug})
+        return reverse('shop:product_detail', kwargs={'slug': self.slug})
 
 
 class Order(models.Model):

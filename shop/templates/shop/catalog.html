@@ -19,17 +19,21 @@
         <div class="catalog-toolbar">
             
             <div class="search-container">
-                <input type="search" id="product-search" placeholder="Pesquisar por nome...">
+                <form action="{% url 'shop:catalog' %}" method="GET">
+                    <input type="search" name="q" placeholder="Pesquisar por nome..." value="{{ q }}">
+                </form>
             </div>
 
             <div class="filter-controls">
                 <div class="filter-group">
                     <label for="category-filter">Filtrar por Categoria:</label>
                     <select id="category-filter">
-                        <option value="todas">Todas as Categorias</option>
+                        <option value="todas" {% if not cat %}selected{% endif %}>Todas as Categorias</option>
                         
                         {% for category in categories %}
-                            <option value="{{ category.slug }}">{{ category.name }}</option>
+                            <option value="{{ category.slug }}" {% if category.slug == cat %}selected{% endif %}>
+                                {{ category.name }}
+                            </option>
                         {% endfor %}
                     </select>
                 </div>
@@ -37,9 +41,9 @@
                 <div class="filter-group">
                     <label for="sort-by">Ordenar por:</label>
                     <select id="sort-by">
-                        <option value="relevancia">Relevância</option>
-                        <option value="preco-asc">Menor Preço</option>
-                        <option value="preco-desc">Maior Preço</option>
+                        <option value="relevancia" {% if not sort or sort == '-created' %}selected{% endif %}>Relevância</option>
+                        <option value="preco-asc" {% if sort == 'price' %}selected{% endif %}>Menor Preço</option>
+                        <option value="preco-desc" {% if sort == '-price' %}selected{% endif %}>Maior Preço</option>
                     </select>
                 </div>
             </div>
@@ -70,7 +74,9 @@
             {% empty %}
                 <p>Nenhum produto encontrado.</p>
             {% endfor %}
-            </div> </div> <script src="/static/js/catalog.js"></script>
+            </div> 
+    </div> 
+    <script src="/static/js/catalog.js"></script>
 
 </body>
 </html>

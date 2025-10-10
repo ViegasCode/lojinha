@@ -1,0 +1,43 @@
+{% extends 'shop/painel/base_painel.html' %}
+
+{% block title %}{% if categoria %}Editar Categoria{% else %}Adicionar Categoria{% endif %}{% endblock %}
+
+{% block content %}
+    {% if categoria %}
+        <h1>Editar Categoria: {{ categoria.name }}</h1>
+    {% else %}
+        <h1>Adicionar Nova Categoria</h1>
+    {% endif %}
+
+    <form method="POST" class="mt-4">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="mb-3">
+                {{ field.label_tag }}
+                {{ field }}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-success">Salvar Categoria</button>
+        <a href="{% url 'painel:lista_categorias' %}" class="btn btn-light">Cancelar</a>
+    </form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Script para adicionar a classe do Bootstrap nos inputs
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('form input, form select').forEach(function(element) {
+            if (element.type !== 'checkbox') {
+                element.classList.add('form-control');
+            }
+        });
+
+        // Script para o slug automático
+        const nameInput = document.getElementById('id_name');
+        const slugInput = document.getElementById('id_slug');
+        if (nameInput && slugInput) {
+            // ... (código do slugify, igual ao do produto_form.html) ...
+        }
+    });
+</script>
+{% endblock %}

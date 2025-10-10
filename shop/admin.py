@@ -16,6 +16,7 @@ class ProductAdmin(admin.ModelAdmin):
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
+    readonly_fields = ('product', 'qty', 'unit_price_cents') 
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
@@ -23,6 +24,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("short_code", "customer_email")
     inlines = (OrderItemInline,)
+    readonly_fields = ('created_at', 'total_cents', 'customer_email', 'customer_phone', 'public_token', 'short_code') 
 
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):

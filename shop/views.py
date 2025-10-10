@@ -2,39 +2,30 @@ import json
 import logging
 import os
 
-from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
-from django.shortcuts import get_object_or_404, render
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-from django.core.mail import send_mail
 from django.conf import settings
-from django.urls import reverse
-
-from .models import Product, Order, OrderItem
-from .utils import gen_otp, otp_expiry
-from .services.payments import MercadoPago
-
-log = logging.getLogger(__name__)
-
-# ---------- CATÁLOGO ----------
-
-from django.shortcuts import render, get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.core.mail import send_mail
-from django.conf import settings
-from django.urls import reverse
-from .models import Product, Order, OrderItem, Category
-from .utils import gen_otp, otp_expiry
-from .services.payments import MercadoPago
-import json, logging, os
-log = logging.getLogger(__name__)
-
-from django.shortcuts import render, get_object_or_404
-from .models import Product, Category
 from django.core.paginator import Paginator
-from django.db.models import Q, F
+from django.db import transaction
+from django.db.models import F, Q
+from django.http import (HttpResponse, HttpResponseBadRequest,
+                         HttpResponseForbidden, JsonResponse)
+from django.shortcuts import redirect, get_object_or_404, render
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
+from .cart import (add as cart_add, clear as cart_clear, items as cart_items,
+                   set_qty as cart_set_qty, total_cents as cart_total)
+from .models import Category, Order, OrderItem, Product
+from .services.payments import MercadoPago
+from .utils import gen_otp, otp_expiry
+
+from django.contrib.auth.decorators import login_required
+from .forms import ProductForm, CategoryForm
+
+log = logging.getLogger(__name__)
+
 
 def catalog_view(request):
     """
@@ -51,7 +42,6 @@ def catalog_view(request):
     sort = (request.GET.get("sort") or "-created").strip()
     featured = request.GET.get("featured") == "1"
 
-    # preços em REAIS (ex.: 19.90) -> centavos
     def to_cents(val):
         if not val:
             return None
@@ -65,6 +55,9 @@ def catalog_view(request):
 
     products = Product.objects.filter(active=True)
 
+    print(f"--- Recebido: Categoria='{cat}', Ordenação='{sort}' ---")
+    print(f"1. Contagem de produtos ANTES do filtro: {products.count()}")
+
     if q:
         products = products.filter(Q(title__icontains=q) | Q(description__icontains=q))
     if cat:
@@ -76,12 +69,14 @@ def catalog_view(request):
     if max_cents is not None:
         products = products.filter(price_cents__lte=max_cents)
 
+    print(f"2. Contagem de produtos DEPOIS do filtro: {products.count()}")
+
     sort_map = {
         "created": "created_at",
         "-created": "-created_at",
         "price": "price_cents",
         "-price": "-price_cents",
-        "pop": "-views",  # 👈 popularidade (mais vistos primeiro)
+        "pop": "-views",
     }
     products = products.order_by(sort_map.get(sort, "-created_at"))
 
@@ -96,21 +91,20 @@ def catalog_view(request):
         "sort": sort,
         "cat": cat,
         "featured_flag": featured,
-        "cats": cats,
+        "categories": cats,
         "min_price": request.GET.get("min_price") or "",
         "max_price": request.GET.get("max_price") or "",
     }
     return render(request, "shop/catalog.html", ctx)
 
+
 def product_detail(request, slug):
     product = get_object_or_404(Product, slug=slug, active=True)
-    # incrementa popularidade de forma atômica
     Product.objects.filter(pk=product.pk).update(views=F("views") + 1)
     product.refresh_from_db(fields=["views"])
     return render(request, "shop/product_detail.html", {"product": product})
 
 
-# ---------- CHECKOUT ----------
 @csrf_exempt
 @require_http_methods(["POST"])
 def create_checkout(request):
@@ -127,7 +121,6 @@ def create_checkout(request):
 
     product = get_object_or_404(Product, pk=product_id, active=True)
 
-    # Valida estoque básico
     if product.stock is not None and qty > product.stock > 0:
         return HttpResponseBadRequest("Sem estoque suficiente")
 
@@ -148,7 +141,6 @@ def create_checkout(request):
             payer_email=email,
         )
     except Exception as e:
-        # não derruba a app — devolve erro amigável ao front
         return JsonResponse({"error": f"Falha no checkout: {e}"}, status=502)
 
     order.payment_provider_id = pref.get("id", "")
@@ -162,10 +154,6 @@ def create_checkout(request):
     })
 
 
-# ---------- WEBHOOK MERCADO PAGO ----------
-
-from django.db import transaction
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def mp_webhook(request):
@@ -177,11 +165,11 @@ def mp_webhook(request):
 
     data_id = (event.get("data") or {}).get("id")
     if not data_id:
-        return HttpResponse(status=200)  # nada a fazer / não é evento de payment
+        return HttpResponse(status=200)
 
     info = MercadoPago.get_payment_info(str(data_id))
     status = (info.get("status") or "").lower()
-    external_reference = info.get("external_reference")  # deve conter o Order.id
+    external_reference = info.get("external_reference")
 
     order = None
     if external_reference:
@@ -190,22 +178,18 @@ def mp_webhook(request):
         except (Order.DoesNotExist, ValueError):
             order = None
 
-    # Fallback: se não achou por external_reference, tenta a última pendente
     if order is None:
         order = Order.objects.filter(status="pending").order_by("-created_at").first()
 
     if not order:
         return HttpResponse(status=200)
 
-    # Idempotência simples: se já está pago e chegar repetido, apenas 200 OK
     if status in ("approved", "accredited"):
         if order.status != "paid":
             with transaction.atomic():
-                # baixa estoque uma única vez
                 items = list(order.items.select_related("product").all())
                 for it in items:
                     p = it.product
-                    # evita estoque negativo
                     new_stock = p.stock - it.qty
                     if new_stock < 0:
                         new_stock = 0
@@ -218,7 +202,6 @@ def mp_webhook(request):
             order.status = "canceled"
             order.save(update_fields=["status"])
 
-    # Envia e-mail com link mágico
     if order.customer_email:
         try:
             send_mail(
@@ -236,104 +219,6 @@ def mp_webhook(request):
 
     return HttpResponse(status=200)
 
-# ---------- LINK MÁGICO & CONSULTA ----------
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def orders_lookup(request):
-    """Cliente envia email + short_code → sistema gera OTP e manda por e-mail."""
-    try:
-        payload = json.loads(request.body)
-    except Exception:
-        return HttpResponseBadRequest("JSON inválido")
-
-    email = payload.get("email")
-    short = payload.get("short_code")
-    if not (email and short):
-        return HttpResponseBadRequest("email e short_code são obrigatórios")
-
-    try:
-        order = Order.objects.get(customer_email__iexact=email, short_code__iexact=short)
-    except Order.DoesNotExist:
-        return HttpResponseBadRequest("pedido não encontrado")
-
-    otp = gen_otp()
-    order.otp_code = otp
-    order.otp_expires_at = otp_expiry(10)
-    order.save(update_fields=["otp_code", "otp_expires_at"])
-
-    send_mail(
-        subject="Seu código de verificação",
-        message=f"Seu código é: {otp}. Ele expira em 10 minutos.",
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-        recipient_list=[email],
-        fail_silently=True,
-    )
-
-    return JsonResponse({"message": "OTP enviado"})
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def verify_otp(request):
-    try:
-        payload = json.loads(request.body)
-    except Exception:
-        return HttpResponseBadRequest("JSON inválido")
-
-    email = payload.get("email")
-    short = payload.get("short_code")
-    otp = payload.get("otp")
-
-    if not (email and short and otp):
-        return HttpResponseBadRequest("campos obrigatórios faltando")
-
-    try:
-        order = Order.objects.get(customer_email__iexact=email, short_code__iexact=short)
-    except Order.DoesNotExist:
-        return HttpResponseBadRequest("pedido não encontrado")
-
-    if not order.otp_code or not order.otp_expires_at:
-        return HttpResponseBadRequest("solicite o código novamente")
-
-    from django.utils import timezone
-    if timezone.now() > order.otp_expires_at:
-        return HttpResponseBadRequest("código expirado")
-
-    if str(otp) != order.otp_code:
-        return HttpResponseForbidden("código incorreto")
-
-    return JsonResponse({"public_url": request.build_absolute_uri(f"/pedido/{order.public_token}/")})
-
-# ---------- PÁGINAS SIMPLES ----------
-
-from django.shortcuts import render, get_object_or_404
-# ...imports já existentes...
-
-def order_status(request, public_token):
-    """
-    Página de status do pedido com resumo dos itens.
-    """
-    order = get_object_or_404(Order.objects.prefetch_related("items__product"), public_token=public_token)
-    items = list(order.items.all())
-    # total_cents já é salvo no momento do checkout; mantemos como fonte de verdade.
-    ctx = {
-        "order": order,
-        "items": items,
-        "items_count": sum(it.qty for it in items),
-    }
-    return render(request, "shop/order_status.html", ctx)
-
-
-def checkout_success(request):
-    return render(request, "shop/checkout_success.html")
-
-def order_lookup_page(request):
-    """Página HTML para cliente buscar pedido via email + short_code + OTP."""
-    return render(request, "shop/order_lookup.html")
-
-# Substitua apenas a função orders_lookup por esta:
-
-from django.db.models import Max
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -357,10 +242,8 @@ def orders_lookup(request):
 
     try:
         if short:
-            # Caminho 1: lookup pelo par email + short_code
             order = Order.objects.get(customer_email__iexact=email, short_code__iexact=short)
         else:
-            # Caminho 2: apenas email -> pega o pedido mais recente
             order = (
                 Order.objects
                 .filter(customer_email__iexact=email)
@@ -386,20 +269,68 @@ def orders_lookup(request):
     )
 
     return JsonResponse({"message": "OTP enviado"})
-# ... imports já existentes ...
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-from django.db.models import F
-from .cart import items as cart_items, add as cart_add, set_qty as cart_set_qty, clear as cart_clear, total_cents as cart_total
-from .models import Product, Order, OrderItem
-from .services.payments import MercadoPago
 
-# --------- CARRINHO (session) ---------
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def verify_otp(request):
+    try:
+        payload = json.loads(request.body)
+    except Exception:
+        return HttpResponseBadRequest("JSON inválido")
+
+    email = payload.get("email")
+    short = payload.get("short_code")
+    otp = payload.get("otp")
+
+    if not (email and short and otp):
+        return HttpResponseBadRequest("campos obrigatórios faltando")
+
+    try:
+        order = Order.objects.get(customer_email__iexact=email, short_code__iexact=short)
+    except Order.DoesNotExist:
+        return HttpResponseBadRequest("pedido não encontrado")
+
+    if not order.otp_code or not order.otp_expires_at:
+        return HttpResponseBadRequest("solicite o código novamente")
+
+    if timezone.now() > order.otp_expires_at:
+        return HttpResponseBadRequest("código expirado")
+
+    if str(otp) != order.otp_code:
+        return HttpResponseForbidden("código incorreto")
+
+    return JsonResponse({"public_url": request.build_absolute_uri(f"/pedido/{order.public_token}/")})
+
+
+def order_status(request, public_token):
+    """
+    Página de status do pedido com resumo dos itens.
+    """
+    order = get_object_or_404(Order.objects.prefetch_related("items__product"), public_token=public_token)
+    items = list(order.items.all())
+    ctx = {
+        "order": order,
+        "items": items,
+        "items_count": sum(it.qty for it in items),
+    }
+    return render(request, "shop/order_status.html", ctx)
+
+
+def checkout_success(request):
+    return render(request, "shop/checkout_success.html")
+
+
+def order_lookup_page(request):
+    """Página HTML para cliente buscar pedido via email + short_code + OTP."""
+    return render(request, "shop/order_lookup.html")
+
 
 def cart_view(request):
     its = cart_items(request.session)
     total = cart_total(request.session)
     return render(request, "shop/cart.html", {"items": its, "total_cents": total})
+
 
 @require_http_methods(["POST"])
 def api_cart_add(request):
@@ -411,10 +342,10 @@ def api_cart_add(request):
     qty = int(data.get("qty", 1))
     if not pid:
         return HttpResponseBadRequest("product_id é obrigatório")
-    # valida produto ativo
     get_object_or_404(Product, pk=pid, active=True)
     cart_add(request.session, int(pid), qty)
     return JsonResponse({"message": "ok"})
+
 
 @require_http_methods(["POST"])
 def api_cart_update(request):
@@ -429,12 +360,13 @@ def api_cart_update(request):
     cart_set_qty(request.session, int(pid), qty)
     return JsonResponse({"message": "ok"})
 
+
 @require_http_methods(["POST"])
 def api_cart_clear(request):
     cart_clear(request.session)
     return JsonResponse({"message": "ok"})
 
-@require_http_methods(["POST"])
+
 @require_http_methods(["POST"])
 def checkout_from_cart(request):
     try:
@@ -488,3 +420,69 @@ def checkout_from_cart(request):
         "init_point": pref.get("init_point"),
     })
 
+@login_required
+def lista_produtos_view(request):
+    # Futuramente, você pode filtrar por request.user para mostrar apenas os produtos daquele vendedor
+    produtos = Product.objects.all().order_by('-created_at') 
+    return render(request, 'shop/painel/lista_produtos.html', {'products': produtos})
+
+@login_required
+def lista_produtos_view(request):
+    produtos = Product.objects.all().order_by('-created_at') 
+    return render(request, 'shop/painel/lista_produtos.html', {'products': produtos})
+
+@login_required
+def criar_produto_view(request):
+    if request.method == 'POST':
+        # Versão simplificada, sem commit=False e slugify
+        form = ProductForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save() # Salva diretamente
+            return redirect('painel:lista_produtos')
+    else:
+        form = ProductForm()
+    
+    return render(request, 'shop/painel/produto_form.html', {'form': form})
+
+@login_required
+def editar_produto_view(request, pk):
+    produto = get_object_or_404(Product, pk=pk)
+    if request.method == 'POST':
+        # Versão simplificada
+        form = ProductForm(request.POST, request.FILES, instance=produto)
+        if form.is_valid():
+            form.save() # Salva diretamente
+            return redirect('painel:lista_produtos')
+    else:
+        form = ProductForm(instance=produto)
+        
+    return render(request, 'shop/painel/produto_form.html', {'form': form, 'produto': produto})
+
+
+@login_required
+def lista_categorias_view(request):
+    categorias = Category.objects.all().order_by('name')
+    return render(request, 'shop/painel/lista_categorias.html', {'categories': categorias})
+
+@login_required
+def criar_categoria_view(request):
+    if request.method == 'POST':
+        form = CategoryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('painel:lista_categorias')
+    else:
+        form = CategoryForm()
+    return render(request, 'shop/painel/categoria_form.html', {'form': form})
+
+@login_required
+def editar_categoria_view(request, pk):
+    categoria = get_object_or_404(Category, pk=pk)
+    if request.method == 'POST':
+        form = CategoryForm(request.POST, instance=categoria)
+        if form.is_valid():
+            form.save()
+            return redirect('painel:lista_categorias')
+    else:
+        form = CategoryForm(instance=categoria)
+    return render(request, 'shop/painel/categoria_form.html', {'form': form, 'categoria': categoria})

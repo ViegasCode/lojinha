@@ -1,0 +1,72 @@
+{% extends 'shop/painel/base_painel.html' %}
+
+{% block title %}{% if produto %}Editar Produto{% else %}Adicionar Produto{% endif %}{% endblock %}
+
+{% block content %}
+    {% if produto %}
+        <h1>Editar Produto: {{ produto.title }}</h1>
+    {% else %}
+        <h1>Adicionar Novo Produto</h1>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" class="mt-4">
+        {% csrf_token %}
+        
+        {% for field in form %}
+            <div class="mb-3">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                    <small class="form-text text-muted">{{ field.help_text }}</small>
+                {% endif %}
+                {% for error in field.errors %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-success">Salvar Produto</button>
+        <a href="{% url 'painel:lista_produtos' %}" class="btn btn-light">Cancelar</a>
+    </form>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }} {# Mantém o script do bloco pai, se houver #}
+    <script>
+        // Script para adicionar a classe do Bootstrap em todos os inputs/selects do formulário
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('form input, form select, form textarea').forEach(function(element) {
+                if (element.type !== 'checkbox') {
+                    element.classList.add('form-control');
+                }
+            });
+        });
+
+        // Script para o slug automático que já tínhamos
+        const titleInput = document.getElementById('id_title');
+        const slugInput = document.getElementById('id_slug');
+
+        if (titleInput && slugInput) {
+            const slugify = (text) => {
+                return text.toString().toLowerCase()
+                    .replace(/\s+/g, '-')
+                    .replace(/[^\w\-]+/g, '')
+                    .replace(/\-\-+/g, '-')
+                    .replace(/^-+/, '')
+                    .replace(/-+$/, '');
+            };
+
+            titleInput.addEventListener('keyup', () => {
+                // Só atualiza se o usuário não tiver digitado nada manualmente no slug
+                if (!slugInput.hasAttribute('data-manual-edit')) {
+                    slugInput.value = slugify(titleInput.value);
+                }
+            });
+
+            slugInput.addEventListener('input', () => {
+                // Marca que o usuário editou o slug manualmente
+                slugInput.setAttribute('data-manual-edit', 'true');
+            });
+        }
+    </script>
+{% endblock %}

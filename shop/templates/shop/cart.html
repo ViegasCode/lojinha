@@ -23,7 +23,7 @@
                                 <th class="right">Preço</th>
                                 <th class="right">Qtd</th>
                                 <th class="right">Subtotal</th>
-                            </tr>
+                                <th></th> </tr>
                         </thead>
                         <tbody id="cart-body">
                             {% for p, qty in items %}
@@ -43,6 +43,10 @@
                                 <td class="right">
                                     {% widthratio p.price_cents 1 qty as sub_cents %}
                                     {{ sub_cents|money }}
+                                </td>
+                                <td class="right">
+                                    <button class="btn-remove remove-item-btn" title="Remover item">
+                                        &#128465; </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -89,7 +93,6 @@
     </div>
 
     <script>
-        // SEU CÓDIGO JAVASCRIPT CONTINUA O MESMO, SEM ALTERAÇÕES
         function getCookie(name){
             const value = `; ${document.cookie}`;
             const parts = value.split(`; ${name}=`);
@@ -97,6 +100,7 @@
         }
         const csrftoken = getCookie('csrftoken') || '';
 
+        // Lógica para atualizar a quantidade (já existente)
         document.querySelectorAll('#cart-body tr input[type="number"]').forEach(inp => {
             inp.addEventListener('change', async (e) => {
                 const tr = e.target.closest('tr');
@@ -116,6 +120,30 @@
             });
         });
 
+        // NOVO: Lógica para remover um item específico
+        document.querySelectorAll('.remove-item-btn').forEach(button => {
+            button.addEventListener('click', async (e) => {
+                const tr = e.target.closest('tr');
+                const pid = tr.getAttribute('data-id');
+
+                if (!confirm('Remover este item do carrinho?')) return;
+
+                try {
+                    const r = await fetch('/api/cart/update', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json', 'X-CSRFToken': csrftoken},
+                        // Reutilizamos a API de update, passando a quantidade 0
+                        body: JSON.stringify({product_id: pid, qty: 0}) 
+                    });
+                    if (!r.ok) { alert('Erro ao remover item'); return; }
+                    location.reload();
+                } catch(err) {
+                    alert('Erro inesperado: ' + err);
+                }
+            });
+        });
+
+        // Lógica para limpar o carrinho (já existente)
         const btnClear = document.getElementById('btn-clear');
         if(btnClear){
             btnClear.addEventListener('click', async () => {
@@ -126,6 +154,7 @@
             });
         }
 
+        // Lógica do formulário de checkout (já existente)
         const form = document.getElementById('checkout-form');
         if(form){
             const msg = document.getElementById('msg');
